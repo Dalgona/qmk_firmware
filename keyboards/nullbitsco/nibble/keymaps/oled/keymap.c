@@ -23,6 +23,13 @@ enum layer_names {
 
 enum custom_keycodes {
     KC_CUST = SAFE_RANGE,
+    KC_OLE0,
+    KC_OLE1
+};
+
+enum oled_mode {
+    OLED_MODE_LOGO,
+    OLED_MODE_INTERNAL
 };
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
@@ -36,21 +43,56 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_FN] = LAYOUT_ansi(
                  KC_GRV,  KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12,  _______,  KC_END,
         RGB_TOG, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
-        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
-        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
+        KC_OLE0, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
+        KC_OLE1, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
         _______, _______, _______, _______,                   _______,                   _______, _______, _______, KC_MPRV,          KC_MPLY, KC_MNXT
     ),
 };
 
+static enum oled_mode g_oled_mode = OLED_MODE_INTERNAL;
+
 #ifdef OLED_ENABLE
 oled_rotation_t oled_init_user(oled_rotation_t rotation) { return OLED_ROTATION_180; }
 
-static void render_logo(void) {
+void oled_render_logo(void) {
     oled_write_raw_P(oled_logo, sizeof(oled_logo));
 }
 
+void oled_render_internal(void) {
+    oled_write_P(PSTR("Layer: "), false);
+
+    switch (get_highest_layer(layer_state)) {
+        case _MA:
+            oled_write_P(PSTR("Default\n"), false);
+            break;
+        case _FN:
+            oled_write_P(PSTR("FN\n"), true);
+            break;
+        default:
+            oled_write_P(PSTR("Undefined\n"), false);
+            break;
+    }
+
+    uint8_t wpm = get_current_wpm();
+    char wpm_str[4] = { 0 };
+    wpm_str[2] = '0' + wpm % 10;
+    wpm_str[1] = '0' + (wpm /= 10) % 10;
+    wpm_str[0] = '0' + wpm / 10;
+
+    oled_write_P(PSTR("Current WPM: "), false);
+    oled_write_ln(wpm_str, false);
+}
+
 bool oled_task_user(void) {
-    render_logo();
+    switch (g_oled_mode) {
+        case OLED_MODE_LOGO:
+            oled_render_logo();
+            break;
+        case OLED_MODE_INTERNAL:
+            oled_render_internal();
+            break;
+    }
+
     return false;
 }
 #endif
@@ -62,27 +104,40 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case KC_CUST: //custom macro
             if (record->event.pressed) {
             }
-        break;
+            break;
+
+        case KC_OLE0:
+            if (record->event.pressed) {
+                g_oled_mode = OLED_MODE_LOGO;
+            }
+            break;
+
+        case KC_OLE1:
+            if (record->event.pressed) {
+                oled_clear();
+                g_oled_mode = OLED_MODE_INTERNAL;
+            }
+            break;
 
         case RM_1: //remote macro 1
-        if (record->event.pressed) {
-        }
-        break;
+            if (record->event.pressed) {
+            }
+            break;
 
         case RM_2: //remote macro 2
-        if (record->event.pressed) {
-        }
-        break;
+            if (record->event.pressed) {
+            }
+            break;
 
         case RM_3: //remote macro 3
-        if (record->event.pressed) {
-        }
-        break;
+            if (record->event.pressed) {
+            }
+            break;
 
         case RM_4: //remote macro 4
-        if (record->event.pressed) {
-        }
-        break;
+            if (record->event.pressed) {
+            }
+            break;
 
     }
     return true;
