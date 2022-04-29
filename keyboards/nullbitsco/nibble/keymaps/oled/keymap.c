@@ -14,6 +14,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include QMK_KEYBOARD_H
+#include "raw_hid.h"
 #include "oled_logo.h"
 
 enum layer_names {
@@ -24,13 +25,19 @@ enum layer_names {
 enum custom_keycodes {
     KC_CUST = SAFE_RANGE,
     KC_OLE0,
-    KC_OLE1
+    KC_OLE1,
+    KC_OLE2
 };
 
 enum oled_mode {
     OLED_MODE_LOGO,
-    OLED_MODE_INTERNAL
+    OLED_MODE_INTERNAL,
+    OLED_MODE_RAWHID
 };
+
+typedef enum {
+    HID_OP_SETBUF
+} hid_op_t;
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_MA] = LAYOUT_ansi(
@@ -45,17 +52,23 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         RGB_TOG, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
         KC_OLE0, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
         KC_OLE1, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
-        _______, _______, _______, _______,                   _______,                   _______, _______, _______, KC_MPRV,          KC_MPLY, KC_MNXT
+        KC_OLE2, _______, _______, _______,                   _______,                   _______, _______, _______, KC_MPRV,          KC_MPLY, KC_MNXT
     ),
 };
 
+#define OLED_BUFSIZ 512
+
+static char oled_buf[OLED_BUFSIZ] = { 0 };
 static enum oled_mode g_oled_mode = OLED_MODE_INTERNAL;
+static int oled_flush = 1;
 
 #ifdef OLED_ENABLE
 oled_rotation_t oled_init_user(oled_rotation_t rotation) { return OLED_ROTATION_180; }
 
 void oled_render_logo(void) {
     oled_write_raw_P(oled_logo, sizeof(oled_logo));
+
+    oled_flush = 0;
 }
 
 void oled_render_internal(void) {
@@ -83,7 +96,15 @@ void oled_render_internal(void) {
     oled_write_ln(wpm_str, false);
 }
 
+void oled_render_rawhid(void) {
+    oled_write_raw(oled_buf, OLED_BUFSIZ);
+
+    oled_flush = 0;
+}
+
 bool oled_task_user(void) {
+    if (!oled_flush) return false;
+
     switch (g_oled_mode) {
         case OLED_MODE_LOGO:
             oled_render_logo();
@@ -91,11 +112,34 @@ bool oled_task_user(void) {
         case OLED_MODE_INTERNAL:
             oled_render_internal();
             break;
+        case OLED_MODE_RAWHID:
+            oled_render_rawhid();
+            break;
     }
 
     return false;
 }
 #endif
+
+void raw_hid_receive(uint8_t *data, uint8_t length) {
+    uint8_t inst = data[0];
+    uint8_t flag_flush = inst & 0x80;
+    uint8_t opcode = inst & 0x0F;
+
+    switch (opcode) {
+        case HID_OP_SETBUF:
+            memcpy(oled_buf + (int)data[1] * 16, &data[2], 16);
+            break;
+        default:
+            break;
+    }
+
+    if (flag_flush) {
+        oled_flush = 1;
+    }
+
+    raw_hid_send(data, length);
+}
 
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
   // Send keystrokes to host keyboard, if connected (see readme)
@@ -109,6 +153,7 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case KC_OLE0:
             if (record->event.pressed) {
                 g_oled_mode = OLED_MODE_LOGO;
+                oled_flush = 1;
             }
             break;
 
@@ -116,6 +161,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             if (record->event.pressed) {
                 oled_clear();
                 g_oled_mode = OLED_MODE_INTERNAL;
+                oled_flush = 1;
+            }
+            break;
+
+        case KC_OLE2:
+            if (record->event.pressed) {
+                g_oled_mode = OLED_MODE_RAWHID;
+                oled_flush = 1;
             }
             break;
 
