@@ -62,6 +62,27 @@ static char oled_buf[OLED_BUFSIZ] = { 0 };
 static enum oled_mode g_oled_mode = OLED_MODE_INTERNAL;
 static int oled_flush = 1;
 
+static uint8_t hue_raw = 0;
+static uint16_t hue_360 = 0;
+static char hue_str[4] = { 0 };
+
+void digits(uint16_t value, char str[4]) {
+    str[3] = 0;
+    str[2] = '0' + value % 10;
+    str[1] = '0' + (value /= 10) % 10;
+    str[0] = '0' + (value /= 10) % 10;
+}
+
+void update_rgblight_state(void) {
+    hue_raw = rgblight_get_hue();
+    hue_360 = (uint16_t)(((uint32_t)hue_raw * 360) / 256);
+    digits(hue_360, hue_str);
+}
+
+void keyboard_post_init_user(void) {
+    update_rgblight_state();
+}
+
 #ifdef OLED_ENABLE
 oled_rotation_t oled_init_user(oled_rotation_t rotation) { return OLED_ROTATION_180; }
 
@@ -86,14 +107,13 @@ void oled_render_internal(void) {
             break;
     }
 
-    uint8_t wpm = get_current_wpm();
     char wpm_str[4] = { 0 };
-    wpm_str[2] = '0' + wpm % 10;
-    wpm_str[1] = '0' + (wpm /= 10) % 10;
-    wpm_str[0] = '0' + wpm / 10;
-
+    digits(get_current_wpm(), wpm_str);
     oled_write_P(PSTR("Current WPM: "), false);
     oled_write_ln(wpm_str, false);
+
+    oled_write_P(PSTR("RGB Light Hue: "), false);
+    oled_write_ln(hue_str, false);
 }
 
 void oled_render_rawhid(void) {
@@ -204,6 +224,7 @@ bool encoder_update_user(uint8_t index, bool clockwise) {
         } else {
             rgblight_decrease_hue();
         }
+        update_rgblight_state();
     } else {
         if (clockwise) {
             tap_code(KC_VOLU);
