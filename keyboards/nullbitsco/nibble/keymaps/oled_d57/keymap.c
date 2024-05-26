@@ -24,9 +24,9 @@ enum layer_names {
 
 enum custom_keycodes {
     KC_CUST = SAFE_RANGE,
-    KC_OLE0,
-    KC_OLE1,
-    KC_OLE2
+    KC_OLE0, // OLED Display Mode 1: Logo
+    KC_OLE1, // OLED Display Mode 2: Textual Information
+    KC_OLE2  // OLED Display Mode 3: External Image via Raw HID
 };
 
 enum oled_mode {
@@ -48,7 +48,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         XXXXXXX, KC_CAPS, KC_LALT, KC_LGUI,                   KC_SPC,                    KC_RALT, MO(_FN), KC_RCTL, KC_LEFT,          KC_DOWN, KC_RGHT
     ),
     [_FN] = LAYOUT_ansi(
-                 KC_GRV,  KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12,  _______,  KC_END,
+                 QK_BOOT, KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_F6,   KC_F7,   KC_F8,   KC_F9,   KC_F10,  KC_F11,  KC_F12,  _______,  KC_END,
         RGB_TOG, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
         KC_OLE0, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
         KC_OLE1, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
