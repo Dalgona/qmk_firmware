@@ -18,15 +18,17 @@
 #include "oled_logo.h"
 
 enum layer_names {
-  _MA,
-  _FN
+  _MA, // Base layer
+  _FN, // When "FN" key is pressed
+  _UL  // Underglow RGB light configuration mode
 };
 
 enum custom_keycodes {
     KC_CUST = SAFE_RANGE,
     KC_OLE0, // OLED Display Mode 1: Logo
     KC_OLE1, // OLED Display Mode 2: Textual Information
-    KC_OLE2  // OLED Display Mode 3: External Image via Raw HID
+    KC_OLE2, // OLED Display Mode 3: External Image via Raw HID
+    KC_ULED  // Cycle underglow RGB configuration item
 };
 
 enum oled_mode {
@@ -42,7 +44,7 @@ typedef enum {
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     [_MA] = LAYOUT_ansi(
                  KC_ESC,  KC_1,    KC_2,    KC_3,    KC_4,    KC_5,    KC_6,    KC_7,    KC_8,    KC_9,    KC_0,    KC_MINS, KC_EQL,  KC_BSPC, KC_HOME,
-        XXXXXXX, KC_TAB,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,    KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    KC_LBRC, KC_RBRC, KC_BSLS, KC_DEL,
+        TG(_UL), KC_TAB,  KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,    KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,    KC_LBRC, KC_RBRC, KC_BSLS, KC_DEL,
         KC_GRV,  KC_LCTL, KC_A,    KC_S,    KC_D,    KC_F,    KC_G,    KC_H,    KC_J,    KC_K,    KC_L,    KC_SCLN, KC_QUOT,          KC_ENT,  KC_PGUP,
         XXXXXXX, KC_LSFT, KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,    KC_N,    KC_M,    KC_COMM, KC_DOT,  KC_SLSH, KC_RSFT,          KC_UP,   KC_PGDN,
         XXXXXXX, KC_CAPS, KC_LALT, KC_LGUI,                   KC_SPC,                    KC_RALT, MO(_FN), KC_RCTL, KC_LEFT,          KC_DOWN, KC_RGHT
@@ -54,6 +56,24 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         KC_OLE1, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
         KC_OLE2, _______, _______, _______,                   _______,                   _______, _______, _______, KC_MPRV,          KC_MPLY, KC_MNXT
     ),
+    [_UL] = LAYOUT_ansi(
+                 TG(_UL), _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
+        KC_ULED, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,
+        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
+        _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______, _______,          _______, _______,
+        _______, _______, _______, _______,                   _______,                   _______, _______, _______, _______,          _______, _______
+    )
+};
+
+enum rgb_config_item {
+    RGB_CONFIG_HUE,
+    RGB_CONFIG_BRIGHTNESS,
+    RGB_CONFIG_END
+};
+
+const PROGMEM char * const rgb_config_item_strs[] = {
+    [RGB_CONFIG_HUE] = " [HUE] ",
+    [RGB_CONFIG_BRIGHTNESS] = " [BRIGHTNESS] "
 };
 
 #define OLED_BUFSIZ 512
@@ -61,6 +81,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
 static char oled_buf[OLED_BUFSIZ] = { 0 };
 static enum oled_mode g_oled_mode = OLED_MODE_INTERNAL;
 static int oled_flush = 1;
+
+static enum rgb_config_item g_current_rgb_config_item = RGB_CONFIG_HUE;
 
 static uint8_t hue_raw = 0;
 static uint16_t hue_360 = 0;
@@ -102,6 +124,9 @@ void oled_render_internal(void) {
         case _FN:
             oled_write_P(PSTR("FN\n"), true);
             break;
+        case _UL:
+            oled_write_P(PSTR("RGB Config\n"), true);
+            break;
         default:
             oled_write_P(PSTR("Undefined\n"), false);
             break;
@@ -111,9 +136,6 @@ void oled_render_internal(void) {
     digits(get_current_wpm(), wpm_str);
     oled_write_P(PSTR("Current WPM: "), false);
     oled_write_ln(wpm_str, false);
-
-    oled_write_P(PSTR("RGB Light Hue: "), false);
-    oled_write_ln(hue_str, false);
 }
 
 void oled_render_rawhid(void) {
@@ -124,6 +146,14 @@ void oled_render_rawhid(void) {
 
 bool oled_task_user(void) {
     if (!oled_flush) return false;
+
+    if (IS_LAYER_ON(_UL)) {
+        oled_write_P(PSTR("=RGB LED CONFIG MODE="), true);
+        oled_write_P(rgb_config_item_strs[g_current_rgb_config_item], false);
+        oled_write_ln(hue_str, false);
+
+        return false;
+    }
 
     switch (g_oled_mode) {
         case OLED_MODE_LOGO:
@@ -218,21 +248,35 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
 
 bool encoder_update_user(uint8_t index, bool clockwise) {
-    if (IS_LAYER_ON(_FN)) {
-        if (clockwise) {
-            rgblight_increase_hue();
-        } else {
-            rgblight_decrease_hue();
-        }
-        update_rgblight_state();
-    } else {
+    if (get_highest_layer(layer_state) == _MA) {
         if (clockwise) {
             tap_code(KC_VOLU);
         } else {
             tap_code(KC_VOLD);
         }
     }
+    else if (IS_LAYER_ON(_UL)) {
+        if (clockwise) {
+            rgblight_increase_hue();
+        } else {
+            rgblight_decrease_hue();
+        }
+        update_rgblight_state();
+    }
     return false;
+}
+
+layer_state_t layer_state_set_user(layer_state_t state) {
+    switch (get_highest_layer(state)) {
+    case _UL:
+        oled_clear();
+        oled_render_dirty(true);
+        break;
+    default:
+        break;
+    }
+
+    return state;
 }
 
 void matrix_init_user(void) {
